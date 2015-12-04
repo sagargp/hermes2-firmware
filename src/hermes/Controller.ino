@@ -1,211 +1,146 @@
 #include <Servo.h>
 #include <Wire.h>
-#include "IOpins.h"
-#include "Constants.h"
 
-void processCommand(byte A, byte B);
-int available();
+#include "batterystats.h"
+#include "params.h"
+
+typedef struct
+{
+  int left_mode, left_pwm;
+  int right_mode, right_pwm;
+} motor_packet_type;
+
+Params *params;
+BatteryStats batt;
+motor_packet_type mp;
 int read_one();
-
-unsigned int  Volts;
-unsigned int  LeftAmps;
-unsigned int  RightAmps;
-unsigned long chargeTimer;
-unsigned long leftoverload;
-unsigned long rightoverload;
-int highVolts;
-int startVolts;
-
-int Leftspeed  = 0;
-int Rightspeed = 0;
-int Speed;
-int Steer;
-
-byte Charged         = 1; // 0=Flat battery  1=Charged battery
-int Leftmode         = 1; // 0=reverse, 1=brake, 2=forward
-int Rightmode        = 1; // 0=reverse, 1=brake, 2=forward
-byte Leftmodechange  = 0; // Left input must be 1500 before brake or reverse can occur
-byte Rightmodechange = 0; // Right input must be 1500 before brake or reverse can occur
-
-int LeftPWM;  // PWM value for left  motor speed / brake
-int RightPWM; // PWM value for right motor speed / brake
-
-// define servos
-Servo Servo0;
-Servo Servo1;
-Servo Servo2;
-Servo Servo3;
-Servo Servo4;
-Servo Servo5;
-Servo Servo6;
-int servo[7];
 
 void setup()
 {
-  // Attach all the servos
-  Servo0.attach(S0);
-  Servo1.attach(S1);
-  Servo2.attach(S2);
-  Servo3.attach(S3);
-  Servo4.attach(S4);
-  Servo5.attach(S5);
-  Servo6.attach(S6);
-
-  // Set servos to default positions
-  Servo0.writeMicroseconds(DSERVO0);
-  Servo1.writeMicroseconds(DSERVO1);
-  Servo2.writeMicroseconds(DSERVO2);
-  Servo3.writeMicroseconds(DSERVO3);
-  Servo4.writeMicroseconds(DSERVO4);
-  Servo5.writeMicroseconds(DSERVO5);
-  Servo6.writeMicroseconds(DSERVO6);
+  params = new Params();
+  batt.set_params(params);
 
   // Initialize the IO pins
-  pinMode(Charger, OUTPUT); // change Charger pin to output
-  digitalWrite(Charger, 1); // disable current regulator to charge battery
+  pinMode(params->charger_pin(), OUTPUT); // set the charger pin mode to output
+  digitalWrite(params->charger_pin(), 1); // disable current regulator to charge battery
 
-  // Setup the comms
-  Serial.begin(BRATE);
+  // setup the serial port
+  Serial.begin(params->baud_rate());
   Serial.flush();
 }
 
 void loop()
 {
-  // Check battery voltage and current draw of motors
-  Volts     = analogRead(Battery);
-  LeftAmps  = analogRead(LmotorC);
-  RightAmps = analogRead(RmotorC);
-  
-  // Is the left motor current draw exceeding safe limit? Then turn off the motors and record the time
-  if (LeftAmps > LEFTMAXAMPS)
+  // battery tasks
+  batt.update();
+  batt.check_current_draw();
+  batt.check_voltage();
+
+  if (batt.needs_charge())
   {
-    analogWrite(LmotorA, 0);
-    analogWrite(LmotorB, 0);
-    leftoverload = millis();
+    batt.charge();
+    return;
   }
 
-  // Is the right motor current draw exceeding safe limit? Then turn off the motors and record the time
-  if (RightAmps > RIGHTMAXAMPS)
+  if (Serial.available())
   {
-    analogWrite(RmotorA, 0);
-    analogWrite(RmotorB, 0);
-    rightoverload = millis();
-  }
+    unsigned char byte1 = read_one();
+    unsigned char byte2 = read_one();
+    unsigned int command = (byte1 << 8) + byte2;
 
-  // Check the voltage of the battery
-  if ((Volts < LOWVOLT) && (Charged == 1))
-  {
-    // If it's too low, change the status of the battery to "flat".
-    // This will shut down the speed controller until the battery is charged again.
-    Charged     = 0; // "flat"
-    highVolts   = Volts;
-    startVolts  = Volts;
-    chargeTimer = millis();
-
-    // enable current regulator to charge battery
-    digitalWrite(Charger, 0);
-  }
-
-  // Charge the battery if the battery is flat and a charger is plugged in (measured voltage is at least 1V higher than last recorded voltage)
-  if ((Charged == 0) && (Volts-startVolts > 67))
-  {
-    // Record the highest voltage at all times (used to detect peak charging)
-    if (Volts > highVolts)
+    // Change mode
+    if (command == params->command_CH_code())
     {
-      highVolts   = Volts;
-      chargeTimer = millis();
+      // who cares
     }
 
-    // Battery voltage must be higher than this before peak charging can occur.
-    if (Volts > BATVOLT)
+    // Read voltage
+    else if (command == params->command_VO_code())
     {
-      // Detect if we're done charging (battery voltage has levelled out or we've exceeded max charge time)
-      if ((highVolts-Volts) > 5 || (millis()-chargeTimer) > CHARGETIMEOUT)
-      {
-        Charged = 1;
-        digitalWrite(Charger, 1);
-      }
-    } 
+      // returns a "raw" value from the analog pin
+      // divide this by a magic number to get the real voltage
+      // for us, for now, that magic number is 68.319
+      // We'll divide it "client" side so that we can tweak it later
+      int volts = batt.get_voltage();
+      Serial.write(volts/256);
+      Serial.write(volts%256);
+    }
+
+    // flush comms buffers
+    else if (command == params->command_FL_code())
+    {
+      Serial.flush();
+    }
+
+    // read analog pins
+    else if (command == params->command_AN_code())
+    {
+      // who cares
+    }
+
+    // set servos
+    else if (command == params->command_SV_code())
+    {
+      // who cares
+    }
+
+    // set motors
+    else if (command == params->command_HB_code())
+    {
+      // read four bytes from serial:
+      mp.left_mode  = read_one();
+      mp.left_pwm   = read_one();
+      mp.right_mode = read_one();
+      mp.right_pwm  = read_one();
+    }
   }
 
-  // Battery is not flat and charger is not plugged in. Run the non-battery related firmware
-  else
+  if (batt.needs_charge())
   {
-    // If data is available, read a two-byte command and process it
-    if (available() > 1)
+    memset(&mp, 0, sizeof(motor_packet_type));
+  }
+
+  if (batt.left_ok())
+  {
+    switch (mp.left_mode)
     {
-      int A = read_one();
-      int B = read_one();
-      processCommand(A, B);
-    }
+      case 0: // reverse
+        analogWrite(params->left_motor_a_pin(), mp.left_pwm);
+        analogWrite(params->left_motor_b_pin(), 0);
+        break;
+        
+      case 1: // Brake
+        analogWrite(params->left_motor_a_pin(), mp.left_pwm);
+        analogWrite(params->left_motor_b_pin(), mp.left_pwm);
+        break;
 
-    // Drive the H-bridges
-    if (Charged == 1)
-    {
-      // Only drive the left motor if it's been a while since an overload
-      if ((millis()-leftoverload) > OVERLOADTIME)             
-      {
-        switch (Leftmode)
-        {
-          // Reverse
-          case 0:
-            analogWrite(LmotorA, LeftPWM);
-            analogWrite(LmotorB, 0);
-            break;
-
-          // Brake
-          case 1:
-            analogWrite(LmotorA, LeftPWM);
-            analogWrite(LmotorB, LeftPWM);
-            break;
-
-          // Forward
-          case 2:
-            analogWrite(LmotorA, 0);
-            analogWrite(LmotorB, LeftPWM);
-            break;
-        }
-      }
-
-      // Only drive the right motor if it's been a while since an overload
-      if ((millis()-rightoverload) > OVERLOADTIME)
-      {
-        switch (Rightmode)
-        {
-          // Reverse
-          case 0:
-            analogWrite(RmotorA, RightPWM);
-            analogWrite(RmotorB, 0);
-            break;
-
-          // Brake
-          case 1:
-            analogWrite(RmotorA, RightPWM);
-            analogWrite(RmotorB, RightPWM);
-            break;
-
-          // Forward
-          case 2:
-            analogWrite(RmotorA, 0);
-            analogWrite(RmotorB, RightPWM);
-            break;
-        }
-      } 
-    }
-    // Battery is flat, don't drive the motors at all
-    else
-    {
-      analogWrite(LmotorA, 0);
-      analogWrite(LmotorB, 0);
-      analogWrite(RmotorA, 0);
-      analogWrite(RmotorB, 0);
+      case 2: // Forward
+        analogWrite(params->left_motor_a_pin(), 0);
+        analogWrite(params->left_motor_b_pin(), mp.left_pwm);
+        break;
     }
   }
-}
 
-int available()
-{
-  return Serial.available();
+  if (batt.right_ok())
+  {
+    switch (mp.right_mode)
+    {
+      case 0: // reverse
+        analogWrite(params->left_motor_a_pin(), mp.right_pwm);
+        analogWrite(params->left_motor_b_pin(), 0);
+        break;
+        
+      case 1: // Brake
+        analogWrite(params->left_motor_a_pin(), mp.right_pwm);
+        analogWrite(params->left_motor_b_pin(), mp.right_pwm);
+        break;
+
+      case 2: // Forward
+        analogWrite(params->left_motor_a_pin(), 0);
+        analogWrite(params->left_motor_b_pin(), mp.right_pwm);
+        break;
+    }
+  }
 }
 
 int read_one()
@@ -216,81 +151,4 @@ int read_one()
     data = Serial.read();
   } while (data < 0);
   return data;
-}
-
-void write(byte b)
-{
-  Serial.write(b);
-}
-
-void flush()
-{
-  Serial.flush();
-}
-
-void processCommand(byte A, byte B)
-{
-  // VO = get voltage
-  // FL = flush serial buffer
-  // AN = report Analog inputs 1-5
-  // SV = next 7 integers will be position information for servos 0-6
-  // HB = "H" bridge data - next 4 bytes will be:
-  //   left  motor mode 0-2
-  //   left  motor PWM  0-255
-  //   right motor mode 0-2
-  //   right motor PWM  0-255
-
-  int data;
-  int command = (A << 8) + B;
-  switch (command)
-  {
-    case COMMAND_VO:
-      // read the battery voltage (reads 65 for every volt)
-      Volts = analogRead(Battery);
-      write(Volts / 256);
-      write(Volts % 256);
-      break;
-
-    case COMMAND_FL:
-      flush();
-      break;
-
-    case COMMAND_AN:
-      for (int i = 1; i < 6; i++)
-      {
-        // Read the 10-bit analog input
-        data = analogRead(i);
-        
-        // Write each byte one at a time
-        write(highByte(data));
-        write(lowByte(data));
-      }
-      break;
-
-    case COMMAND_SV:
-      // read 14 bytes of data from the user
-      for (int i = 0; i < 15; i++)
-        servo[i] = read_one();
-
-      // Set the servo positions
-      Servo0.writeMicroseconds((servo[0]  << 8) + servo[1]);
-      Servo1.writeMicroseconds((servo[2]  << 8) + servo[3]);
-      Servo2.writeMicroseconds((servo[4]  << 8) + servo[5]);
-      Servo3.writeMicroseconds((servo[6]  << 8) + servo[7]);
-      Servo4.writeMicroseconds((servo[8]  << 8) + servo[9]);
-      Servo5.writeMicroseconds((servo[10] << 8) + servo[11]);
-      Servo6.writeMicroseconds((servo[12] << 8) + servo[13]);
-      break;
-
-    case COMMAND_HB:
-      Leftmode  = read_one();
-      LeftPWM   = read_one();
-      Rightmode = read_one();
-      RightPWM  = read_one();
-      break;
-
-    // Invalid
-    default:
-      flush();
-  }
 }

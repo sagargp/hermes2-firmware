@@ -1,9 +1,22 @@
-#include "batterystats.h"
+#include <Servo.h>
+#include <Wire.h>
 #include "params.h"
+#include "batterystats.h"
+
+BatteryStats::BatteryStats() :
+  m_charged(true)
+{
+}
 
 BatteryStats::BatteryStats(Params *params) :
-  m_params(params)
+  m_params(params),
+  m_charged(true)
 {
+}
+
+void BatteryStats::set_params(Params *params)
+{
+  m_params = params;
 }
 
 void BatteryStats::update()
@@ -45,6 +58,16 @@ void BatteryStats::check_voltage()
   }
 }
 
+bool BatteryStats::get_charged()
+{
+  return m_charged;
+}
+
+int BatteryStats::get_voltage()
+{
+  return m_volts;
+}
+
 bool BatteryStats::needs_charge()
 {
   bool is_plugged_in = (m_volts - m_start_volts) > m_params->one_volt();
@@ -67,4 +90,14 @@ void BatteryStats::charge()
       digitalWrite(m_params->charger_pin(), 1);
     }
   }
+}
+
+bool BatteryStats::left_ok()
+{
+  return (millis() - m_last_left_overload_time > m_params->overload_interval_limit());
+}
+
+bool BatteryStats::right_ok()
+{
+  return (millis() - m_last_right_overload_time > m_params->overload_interval_limit());
 }

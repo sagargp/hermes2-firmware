@@ -1,37 +1,40 @@
+#include <Servo.h>
+#include <Wire.h>
 #include "params.h"
 
 Params::Params()
 {
   // defaults taken from the original Constants.h file
-  m_mode                    = SERIAL;
-  m_baud_rate               = 9600;
-  m_i2c_addr                = 0x04;
-  m_one_volt                = 7;
-  m_battery_pin             = 0;
-  m_left_motor_amps_pin     = 7;
-  m_right_motor_amps_pin    = 6;
-  m_left_motor_a_pin        = 3;
-  m_left_motor_b_pin        = 11;
-  m_right_motor_a_pin       = 5;
-  m_right_motor_b_pin       = 6;
-  m_charger_pin             = 13;
-  max_charge_time_limit     = 300000;
-  min_voltage_limit         = 410;
-  peak_voltage_cutoff_limit = 487;
-  max_left_amps_limit       = 800;
-  max_right_amps_limit      = 800;
-  m_command_CH_code         = 17224;
-  m_command_VO_code         = 22095;
-  m_command_FL_code         = 17996;
-  m_command_AN_code         = 16718;
-  m_command_SV_code         = 21334;
-  m_command_HB_code         = 18498;
+  m_mode                      = MODE_SERIAL;
+  m_baud_rate                 = 9600;
+  m_i2c_addr                  = 0x04;
+  m_one_volt                  = 7;
+  m_battery_pin               = 0;
+  m_left_motor_amps_pin       = 7;
+  m_right_motor_amps_pin      = 6;
+  m_left_motor_a_pin          = 3;
+  m_left_motor_b_pin          = 11;
+  m_right_motor_a_pin         = 5;
+  m_right_motor_b_pin         = 6;
+  m_charger_pin               = 13;
+  m_max_charge_time_limit     = 300000;
+  m_min_voltage_limit         = 410;
+  m_peak_voltage_cutoff_limit = 487;
+  m_max_left_amps_limit       = 800;
+  m_max_right_amps_limit      = 800;
+  m_overload_interval_limit   = 100;
+  m_command_CH_code           = 17224;
+  m_command_VO_code           = 22095;
+  m_command_FL_code           = 17996;
+  m_command_AN_code           = 16718;
+  m_command_SV_code           = 21334;
+  m_command_HB_code           = 18498;
 }
 
 // getters/setters
 Mode_Type Params::mode(Mode_Type mode)
 {
-  if (mode != NONE)
+  if (mode != MODE_NONE)
     m_mode = mode;
   return m_mode;
 }
@@ -113,39 +116,46 @@ unsigned char Params::charger_pin(unsigned char charger_pin)
   return m_charger_pin;
 }
 
-unsigned int max_charge_time_limit(auto max_charge_time_limit)
+unsigned int Params::max_charge_time_limit(unsigned int max_charge_time_limit)
 {
   if (max_charge_time_limit != 0)
     m_max_charge_time_limit = max_charge_time_limit;
   return m_max_charge_time_limit;
 }
 
-unsigned short min_voltage_limit(auto min_voltage_limit)
+unsigned int Params::min_voltage_limit(unsigned int min_voltage_limit)
 {
   if (min_voltage_limit != 0)
     m_min_voltage_limit = min_voltage_limit;
   return m_min_voltage_limit;
 }
 
-unsigned short peak_voltage_cutoff_limit(auto peak_voltage_cutoff_limit)
+unsigned int Params::peak_voltage_cutoff_limit(unsigned int peak_voltage_cutoff_limit)
 {
   if (peak_voltage_cutoff_limit != 0)
     m_peak_voltage_cutoff_limit = peak_voltage_cutoff_limit;
   return m_peak_voltage_cutoff_limit;
 }
 
-unsigned short max_left_amps_limit(auto max_left_amps_limit)
+unsigned int Params::max_left_amps_limit(unsigned int max_left_amps_limit)
 {
   if (max_left_amps_limit != 0)
     m_max_left_amps_limit = max_left_amps_limit;
   return m_max_left_amps_limit;
 }
 
-unsigned short max_right_amps_limit(auto max_right_amps_limit)
+unsigned int Params::max_right_amps_limit(unsigned int max_right_amps_limit)
 {
   if (max_right_amps_limit != 0)
     m_max_right_amps_limit = max_right_amps_limit;
   return m_max_right_amps_limit;
+}
+
+unsigned int Params::overload_interval_limit(unsigned int overload_interval_limit)
+{
+  if (overload_interval_limit != 0)
+    m_overload_interval_limit = overload_interval_limit;
+  return m_overload_interval_limit;
 }
 
 unsigned int Params::command_CH_code(unsigned int command_CH_code)

@@ -1,13 +1,9 @@
 #ifndef __PARAMS_H__
 #define __PARAMS_H__
 
-typedef enum
-{
-  RC,
-  SERIAL,
-  I2C,
-  NONE
-} Mode_Type;
+#include <Arduino.h>
+
+typedef enum Modes { MODE_NONE, MODE_RC, MODE_SERIAL, MODE_I2C } Mode_Type;
 
 class Params
 {
@@ -28,11 +24,12 @@ class Params
     unsigned char m_charger_pin;              // Low = ON, High = OFF
 
     // limits
-    unsigned int max_charge_time_limit;       // If the battery voltage does not change in this number of milliseconds then stop charging.
-    unsigned short min_voltage_limit;         // This is the voltage at which the speed controller goes into recharge mode.
-    unsigned short peak_voltage_cutoff_limit; // This is the nominal battery voltage reading. Peak charge can only occur above this voltage.
-    unsigned short max_left_amps_limit;       // set overload current for left motor
-    unsigned short max_right_amps_limit;      // set overload current for right motor
+    unsigned int m_max_charge_time_limit;       // If the battery voltage does not change in this number of milliseconds then stop charging.
+    unsigned int m_min_voltage_limit;         // This is the voltage at which the speed controller goes into recharge mode.
+    unsigned int m_peak_voltage_cutoff_limit; // This is the nominal battery voltage reading. Peak charge can only occur above this voltage.
+    unsigned int m_max_left_amps_limit;       // set overload current for left motor
+    unsigned int m_max_right_amps_limit;      // set overload current for right motor
+    unsigned int m_overload_interval_limit;   // interval in ms after which it's safe to drive the motors again after an overload
 
     // Command constants. These are computed as (A << 8) + B for AB in: CH, VO, FL, AN, SV, HB
     unsigned int m_command_CH_code;           // Change mode (I2C <--> Serial)
@@ -46,7 +43,7 @@ class Params
     Params();
 
     // getters/setters
-    Mode_Type mode(Mode_Type mode=NONE);
+    Mode_Type mode(Mode_Type mode=MODE_NONE);
 
     unsigned int baud_rate(unsigned int baud_rate=0);
 
@@ -70,15 +67,17 @@ class Params
 
     unsigned char charger_pin(unsigned char charger_pin=0);
 
-    unsigned int max_charge_time_limit(auto max_charge_time_limit=0);
+    unsigned int max_charge_time_limit(unsigned int max_charge_time_limit=0);
 
-    unsigned short min_voltage_limit(auto min_voltage_limit=0);
+    unsigned int min_voltage_limit(unsigned int min_voltage_limit=0);
 
-    unsigned short peak_voltage_cutoff_limit(auto peak_voltage_cutoff_limit=0);
+    unsigned int peak_voltage_cutoff_limit(unsigned int peak_voltage_cutoff_limit=0);
 
-    unsigned short max_left_amps_limit(auto max_left_amps_limit=0);
+    unsigned int max_left_amps_limit(unsigned int max_left_amps_limit=0);
 
-    unsigned short max_right_amps_limit(auto max_right_amps_limit=0);
+    unsigned int max_right_amps_limit(unsigned int max_right_amps_limit=0);
+
+    unsigned int overload_interval_limit(unsigned int overload_interval_limit=0);
 
     unsigned int command_CH_code(unsigned int command_CH_code=0);
 
